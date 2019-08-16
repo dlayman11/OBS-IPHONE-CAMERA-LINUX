@@ -20,6 +20,7 @@
 #define PORTAL_SIMPLE_DATA_PACKET_PROTOCOL_H
 
 #include <vector>
+#include <memory>
 
 #include "logging.h"
 

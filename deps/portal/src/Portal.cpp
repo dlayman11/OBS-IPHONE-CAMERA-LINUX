@@ -17,6 +17,7 @@
  */
 
 #include <iostream>
+#include <cstring>
 
 #include "Portal.hpp"
 

@@ -318,9 +318,12 @@ endif()
 if(UNIX AND NOT APPLE)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
-	target_compile_options(mbedcrypto PRIVATE -fPIC)
-	set_target_properties(obs-ios-camera-source-win PROPERTIES PREFIX "")
-	target_link_libraries(obs-ios-camera-source-win
+	target_compile_options(portal PRIVATE -fPIC)
+	target_compile_options(libusbmuxd PRIVATE -fPIC)
+	target_compile_options(libplist PRIVATE -fPIC)
+	target_compile_options(libcnary PRIVATE -fPIC)
+	set_target_properties(obs-ios-camera-source PROPERTIES PREFIX "")
+	target_link_libraries(obs-ios-camera-source
 		obs-frontend-api)
 
 	file(GLOB locale_files data/locale/*.ini)
@@ -328,7 +331,7 @@ if(UNIX AND NOT APPLE)
 	install(TARGETS obs-ios-camera-source
 		LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/obs-plugins")
 	install(FILES ${locale_files}
-		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ios-camera-source-win/locale")
+		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ios-camera-source/locale")
 endif()
 # --- End of section ---
 

@@ -20,6 +20,7 @@
 #include <list>
 #include <sstream>
 #include <vector>
+#include <algorithm>
 
 namespace portal
 {
