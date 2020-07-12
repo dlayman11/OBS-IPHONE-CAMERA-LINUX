@@ -11,12 +11,13 @@ To use this you use the [accompanying iOS app](https://will.townsend.io/products
 
 ## Downloads
 
-Linux binaries are not provided; instead, compilation and manual installation instructions for Ubuntu 18.04 are supplied below.
+Linux binaries are not provided; instead, compilation and manual installation instructions for Ubuntu 18.04 and 20.04 are supplied below.
 
 ## Building
 
-These instructions are tested on Ubuntu 18.04. For other distros/versions, YMMV.
+These instructions are tested on Ubuntu 18.04 and 20.04. For other distros/versions, YMMV.
 
+- Make sure you have the universe and multiverse repositories enabled so you will have access to FFmpeg.
 - Install OBS Studio using the [instructions on the OBS wiki](https://obsproject.com/wiki/install-instructions#ubuntu-installation).
 - Install prerequisites: `sudo apt install build-essential git cmake libavcodec-dev`
 - Download the OBS Studio source code somewhere: 
