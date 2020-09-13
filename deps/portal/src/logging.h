@@ -17,6 +17,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 */
 
 #pragma once
+#include <cstdio>
 
 #ifdef DEBUG
     #define PORTAL_DEBUG_LOG_ENABLED 1
