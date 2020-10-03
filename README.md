@@ -11,7 +11,15 @@ To use this you use the [accompanying iOS app](https://will.townsend.io/products
 
 ## Downloads
 
-Linux binaries are not provided; instead, compilation and manual installation instructions for Ubuntu 18.04 and 20.04 are supplied below.
+### Ubuntu 20.04 (and possibly other distros) and 18.04
+
+Go to the [actions](https://github.com/dougg3/obs-ios-camera-source/actions) section of this repository and click on the latest workflow that finished successfully. Then download the artifact that corresponds to your version. After downloading, place the zip file in your home directory and run:
+
+```
+unzip plugin-ubuntu-*.zip
+```
+
+You must have the `unzip` package installed for this to work: `sudo apt install unzip`.
 
 ## Building
 
