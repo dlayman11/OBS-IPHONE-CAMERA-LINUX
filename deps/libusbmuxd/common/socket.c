@@ -46,13 +46,13 @@ static int wsa_init = 0;
 
 static int verbose = 0;
 
-void socket_set_verbose(int level)
+void usbmuxd_socket_set_verbose(int level)
 {
 	verbose = level;
 }
 
 #ifndef WIN32
-int socket_create_unix(const char *filename)
+int usbmuxd_socket_create_unix(const char *filename)
 {
 	struct sockaddr_un name;
 	int sock;
@@ -74,7 +74,7 @@ int socket_create_unix(const char *filename)
 #ifdef SO_NOSIGPIPE
 	if (setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, (void*)&yes, sizeof(int)) == -1) {
 		perror("setsockopt()");
-		socket_close(sock);
+		usbmuxd_socket_close(sock);
 		return -1;
 	}
 #endif
@@ -96,20 +96,20 @@ int socket_create_unix(const char *filename)
 
 	if (bind(sock, (struct sockaddr *) &name, size) < 0) {
 		perror("bind");
-		socket_close(sock);
+		usbmuxd_socket_close(sock);
 		return -1;
 	}
 
 	if (listen(sock, 10) < 0) {
 		perror("listen");
-		socket_close(sock);
+		usbmuxd_socket_close(sock);
 		return -1;
 	}
 
 	return sock;
 }
 
-int socket_connect_unix(const char *filename)
+int usbmuxd_socket_connect_unix(const char *filename)
 {
 	struct sockaddr_un name;
 	int sfd = -1;
@@ -143,7 +143,7 @@ int socket_connect_unix(const char *filename)
 #ifdef SO_NOSIGPIPE
 	if (setsockopt(sfd, SOL_SOCKET, SO_NOSIGPIPE, (void*)&yes, sizeof(int)) == -1) {
 		perror("setsockopt()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 #endif
@@ -157,7 +157,7 @@ int socket_connect_unix(const char *filename)
 			+ strlen(name.sun_path) + 1);
 
 	if (connect(sfd, (struct sockaddr *) &name, size) < 0) {
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		if (verbose >= 2)
 			fprintf(stderr, "%s: connect: %s\n", __func__,
 					strerror(errno));
@@ -168,7 +168,7 @@ int socket_connect_unix(const char *filename)
 }
 #endif
 
-int socket_create(uint16_t port)
+int usbmuxd_socket_create(uint16_t port)
 {
 	int sfd = -1;
 	int yes = 1;
@@ -191,14 +191,14 @@ int socket_create(uint16_t port)
 
 	if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void*)&yes, sizeof(int)) == -1) {
 		perror("setsockopt()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 
 #ifdef SO_NOSIGPIPE
 	if (setsockopt(sfd, SOL_SOCKET, SO_NOSIGPIPE, (void*)&yes, sizeof(int)) == -1) {
 		perror("setsockopt()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 #endif
@@ -210,20 +210,20 @@ int socket_create(uint16_t port)
 
 	if (0 > bind(sfd, (struct sockaddr *) &saddr, sizeof(saddr))) {
 		perror("bind()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 
 	if (listen(sfd, 1) == -1) {
 		perror("listen()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 
 	return sfd;
 }
 
-int socket_connect(const char *addr, uint16_t port)
+int usbmuxd_socket_connect(const char *addr, uint16_t port)
 {
 	int sfd = -1;
 	int yes = 1;
@@ -265,14 +265,14 @@ int socket_connect(const char *addr, uint16_t port)
 
 	if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void*)&yes, sizeof(int)) == -1) {
 		perror("setsockopt()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 
 #ifdef SO_NOSIGPIPE
 	if (setsockopt(sfd, SOL_SOCKET, SO_NOSIGPIPE, (void*)&yes, sizeof(int)) == -1) {
 		perror("setsockopt()");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -1;
 	}
 #endif
@@ -284,14 +284,14 @@ int socket_connect(const char *addr, uint16_t port)
 
 	if (connect(sfd, (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
 		perror("connect");
-		socket_close(sfd);
+		usbmuxd_socket_close(sfd);
 		return -2;
 	}
 
 	return sfd;
 }
 
-int socket_check_fd(int fd, fd_mode fdm, unsigned int timeout)
+int usbmuxd_socket_check_fd(int fd, fd_mode fdm, unsigned int timeout)
 {
 	fd_set fds;
 	int sret;
@@ -358,7 +358,7 @@ int socket_check_fd(int fd, fd_mode fdm, unsigned int timeout)
 	return sret;
 }
 
-int socket_accept(int fd, uint16_t port)
+int usbmuxd_socket_accept(int fd, uint16_t port)
 {
 #ifdef WIN32
 	int addr_len;
@@ -379,12 +379,12 @@ int socket_accept(int fd, uint16_t port)
 	return result;
 }
 
-int socket_shutdown(int fd, int how)
+int usbmuxd_socket_shutdown(int fd, int how)
 {
 	return shutdown(fd, how);
 }
 
-int socket_close(int fd) {
+int usbmuxd_socket_close(int fd) {
 #ifdef WIN32
 	return closesocket(fd);
 #else
@@ -392,24 +392,24 @@ int socket_close(int fd) {
 #endif
 }
 
-int socket_receive(int fd, void *data, size_t length)
+int usbmuxd_socket_receive(int fd, void *data, size_t length)
 {
-	return socket_receive_timeout(fd, data, length, 0, RECV_TIMEOUT);
+	return usbmuxd_socket_receive_timeout(fd, data, length, 0, RECV_TIMEOUT);
 }
 
-int socket_peek(int fd, void *data, size_t length)
+int usbmuxd_socket_peek(int fd, void *data, size_t length)
 {
-	return socket_receive_timeout(fd, data, length, MSG_PEEK, RECV_TIMEOUT);
+	return usbmuxd_socket_receive_timeout(fd, data, length, MSG_PEEK, RECV_TIMEOUT);
 }
 
-int socket_receive_timeout(int fd, void *data, size_t length, int flags,
+int usbmuxd_socket_receive_timeout(int fd, void *data, size_t length, int flags,
 					 unsigned int timeout)
 {
 	int res;
 	int result;
 
 	// check if data is available
-	res = socket_check_fd(fd, FDM_READ, timeout);
+	res = usbmuxd_socket_check_fd(fd, FDM_READ, timeout);
 	if (res <= 0) {
 		return res;
 	}
@@ -431,7 +431,7 @@ int socket_receive_timeout(int fd, void *data, size_t length, int flags,
 	return result;
 }
 
-int socket_send(int fd, void *data, size_t length)
+int usbmuxd_socket_send(int fd, void *data, size_t length)
 {
 	int flags = 0;
 #ifdef MSG_NOSIGNAL

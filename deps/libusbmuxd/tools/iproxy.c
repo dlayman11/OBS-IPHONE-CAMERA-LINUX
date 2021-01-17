@@ -70,7 +70,7 @@ static void *run_stoc_loop(void *arg)
 	printf("%s: fd = %d\n", __func__, cdata->fd);
 
 	while (!cdata->stop_stoc && cdata->fd > 0 && cdata->sfd > 0) {
-		recv_len = socket_receive_timeout(cdata->sfd, buffer, sizeof(buffer), 0, 5000);
+		recv_len = usbmuxd_socket_receive_timeout(cdata->sfd, buffer, sizeof(buffer), 0, 5000);
 		if (recv_len <= 0) {
 			if (recv_len == 0) {
 				// try again
@@ -81,7 +81,7 @@ static void *run_stoc_loop(void *arg)
 			}
 		} else {
 			// send to socket
-			sent = socket_send(cdata->fd, buffer, recv_len);
+			sent = usbmuxd_socket_send(cdata->fd, buffer, recv_len);
 			if (sent < recv_len) {
 				if (sent <= 0) {
 					fprintf(stderr, "send failed: %s\n", strerror(errno));
@@ -93,7 +93,7 @@ static void *run_stoc_loop(void *arg)
 		}
 	}
 
-	socket_close(cdata->fd);
+	usbmuxd_socket_close(cdata->fd);
 
 	cdata->fd = -1;
 	cdata->stop_ctos = 1;
@@ -123,7 +123,7 @@ static void *run_ctos_loop(void *arg)
 #endif
 
 	while (!cdata->stop_ctos && cdata->fd>0 && cdata->sfd>0) {
-		recv_len = socket_receive_timeout(cdata->fd, buffer, sizeof(buffer), 0, 5000);
+		recv_len = usbmuxd_socket_receive_timeout(cdata->fd, buffer, sizeof(buffer), 0, 5000);
 		if (recv_len <= 0) {
 			if (recv_len == 0) {
 				// try again
@@ -134,7 +134,7 @@ static void *run_ctos_loop(void *arg)
 			}
 		} else {
 			// send to local socket
-			sent = socket_send(cdata->sfd, buffer, recv_len);
+			sent = usbmuxd_socket_send(cdata->sfd, buffer, recv_len);
 			if (sent < recv_len) {
 				if (sent <= 0) {
 					fprintf(stderr, "send failed: %s\n", strerror(errno));
@@ -146,7 +146,7 @@ static void *run_ctos_loop(void *arg)
 		}
 	}
 
-	socket_close(cdata->fd);
+	usbmuxd_socket_close(cdata->fd);
 
 	cdata->fd = -1;
 	cdata->stop_stoc = 1;
@@ -182,7 +182,7 @@ static void *acceptor_thread(void *arg)
 		printf("Connecting to usbmuxd failed, terminating.\n");
 		free(dev_list);
 		if (cdata->fd > 0) {
-			socket_close(cdata->fd);
+			usbmuxd_socket_close(cdata->fd);
 		}
 		free(cdata);
 		return NULL;
@@ -194,7 +194,7 @@ static void *acceptor_thread(void *arg)
 		printf("No connected device found, terminating.\n");
 		free(dev_list);
 		if (cdata->fd > 0) {
-			socket_close(cdata->fd);
+			usbmuxd_socket_close(cdata->fd);
 		}
 		free(cdata);
 		return NULL;
@@ -217,7 +217,7 @@ static void *acceptor_thread(void *arg)
 		printf("No connected/matching device found, disconnecting client.\n");
 		free(dev_list);
 		if (cdata->fd > 0) {
-			socket_close(cdata->fd);
+			usbmuxd_socket_close(cdata->fd);
 		}
 		free(cdata);
 		return NULL;
@@ -242,10 +242,10 @@ static void *acceptor_thread(void *arg)
 	}
 
 	if (cdata->fd > 0) {
-		socket_close(cdata->fd);
+		usbmuxd_socket_close(cdata->fd);
 	}
 	if (cdata->sfd > 0) {
-		socket_close(cdata->sfd);
+		usbmuxd_socket_close(cdata->sfd);
 	}
 	free(cdata);
 
@@ -289,7 +289,7 @@ int main(int argc, char **argv)
 	}
 
 	// first create the listening socket endpoint waiting for connections.
-	mysock = socket_create(listen_port);
+	mysock = usbmuxd_socket_create(listen_port);
 	if (mysock < 0) {
 		fprintf(stderr, "Error creating socket: %s\n", strerror(errno));
 		return -errno;
@@ -303,12 +303,12 @@ int main(int argc, char **argv)
 		int c_sock;
 		while (1) {
 			printf("waiting for connection\n");
-			c_sock = socket_accept(mysock, listen_port);
+			c_sock = usbmuxd_socket_accept(mysock, listen_port);
 			if (c_sock) {
 				printf("accepted connection, fd = %d\n", c_sock);
 				cdata = (struct client_data*)malloc(sizeof(struct client_data));
 				if (!cdata) {
-					socket_close(c_sock);
+					usbmuxd_socket_close(c_sock);
 					fprintf(stderr, "ERROR: Out of memory\n");
 					return -1;
 				}
@@ -324,8 +324,8 @@ int main(int argc, char **argv)
 				break;
 			}
 		}
-		socket_close(c_sock);
-		socket_close(mysock);
+		usbmuxd_socket_close(c_sock);
+		usbmuxd_socket_close(mysock);
 	}
 
 	return 0;
