@@ -43,6 +43,8 @@ void VideoToolboxDecoder::Init()
 
 void VideoToolboxDecoder::Flush()
 {
+    std::lock_guard<std::mutex> lock (mMutex);
+
     // Clear the queue
     while(this->mQueue.size() > 0) {
         this->mQueue.remove();
@@ -59,6 +61,8 @@ void VideoToolboxDecoder::Drain()
 
 void VideoToolboxDecoder::Shutdown()
 {
+    std::lock_guard<std::mutex> lock (mMutex);
+
     mQueue.stop();
 
     if (mSession != NULL) {
@@ -76,13 +80,29 @@ void *VideoToolboxDecoder::run() {
         PacketItem *item = (PacketItem *)mQueue.remove();
         if (item != NULL) {
             this->processPacketItem(item);
+            delete item;
         }
-        delete item;
+
+        // Check queue lengths
+
+        const int queueSize = mQueue.size();
+        if (queueSize > 5) {
+            blog(LOG_WARNING, "Video Toolbox: decoding queue overloaded. %d frames behind. Please use a lower quality setting.", queueSize);
+
+            while (mQueue.size() > 0) {
+                PacketItem *item = (PacketItem *)mQueue.remove();
+                if (item != NULL) {
+                    blog(LOG_INFO, "Video Toolbox: dropping packet type=%d tag=%d size=%d", item->getType(), item->getTag(), item->size());
+                    delete item;
+                }
+            }
+        }
     }
 
     return NULL;
 }
 
+static const char *video_toolbox_decode_video_name = "obs_camera_video_toolbox_decode_video";
 void VideoToolboxDecoder::processPacketItem(PacketItem *packetItem)
 {
     auto packet = packetItem->getPacket();
@@ -95,6 +115,8 @@ void VideoToolboxDecoder::processPacketItem(PacketItem *packetItem)
     if (frameSize < 3) {
         return;
     }
+
+    std::lock_guard<std::mutex> lock (mMutex);
 
     int naluType = (packet[4] & 0x1F);
 
@@ -252,15 +274,21 @@ void VideoToolboxDecoder::processPacketItem(PacketItem *packetItem)
                                   &sampleSize,
                                   &sampleBuffer);
 
-    VTDecodeFrameFlags flags = 0;
-    VTDecodeInfoFlags flagOut;
+    if (sampleBuffer != NULL) {
+        VTDecodeFrameFlags flags = 0;
+        VTDecodeInfoFlags flagOut;
 
-    auto now = os_gettime_ns();
+        profile_start(video_toolbox_decode_video_name);
 
-    VTDecompressionSessionDecodeFrame(mSession, sampleBuffer, flags,
-                                      (void*)now, &flagOut);
+        auto now = os_gettime_ns();
 
-    CFRelease(sampleBuffer);
+        VTDecompressionSessionDecodeFrame(mSession, sampleBuffer, flags,
+                                          (void*)now, &flagOut);
+
+        CFRelease(sampleBuffer);
+
+        profile_end(video_toolbox_decode_video_name);
+    }
 }
 
 

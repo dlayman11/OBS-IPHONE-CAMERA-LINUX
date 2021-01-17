@@ -123,7 +123,7 @@ public:
             std::unique_lock<std::mutex> lock(mutex);
             blog(LOG_DEBUG, "connect_worker: Running check");
 
-            bool should_disconnect = disconnectOnInactive && !active;
+            bool should_disconnect = disconnectOnInactive && !active || deviceUUID == "";
 
             if (force_reconnect || should_disconnect) {
                 blog(LOG_DEBUG, "connect_worker: Disconnecting");
@@ -232,7 +232,7 @@ public:
         });
 
         if (deviceElement != devices.end()) {
-            blog(LOG_INFO, "Connecting to device %s", deviceUUID.c_str());
+            blog(LOG_DEBUG, "Connecting to device %s", deviceUUID.c_str());
             portal.connectToDevice(deviceElement->second);
         } else {
             blog(LOG_INFO, "No device found to connect for %s", deviceUUID.c_str());
@@ -362,6 +362,8 @@ static const char *GetIOSCameraInputName(void *)
     return TEXT_INPUT_NAME;
 }
 
+static void UpdateIOSCameraInput(void *data, obs_data_t *settings);
+
 static void *CreateIOSCameraInput(obs_data_t *settings, obs_source_t *source)
 {
     IOSCameraInput *cameraInput = nullptr;
@@ -369,6 +371,7 @@ static void *CreateIOSCameraInput(obs_data_t *settings, obs_source_t *source)
     try
     {
         cameraInput = new IOSCameraInput(source, settings);
+        UpdateIOSCameraInput(cameraInput, settings);
     }
     catch (const char *error)
     {
