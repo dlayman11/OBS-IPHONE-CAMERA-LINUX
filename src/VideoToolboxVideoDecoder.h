@@ -23,6 +23,7 @@
 
 #include <VideoToolbox/VideoToolbox.h>
 
+#include "obs-ios-camera-source.h"
 #include "Queue.hpp"
 #include "Thread.hpp"
 #include "VideoDecoder.h"
@@ -65,6 +66,7 @@ private:
     std::vector<char> ppsData;
     
     WorkQueue<PacketItem *> mQueue;
+    std::mutex mMutex;
     
     obs_source_frame frame;
 };
