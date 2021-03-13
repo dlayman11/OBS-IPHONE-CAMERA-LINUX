@@ -27,7 +27,7 @@ jobs:
         path: obs-studio
 
     - name: Install build dependencies
-      run: sudo apt-get update && sudo apt-get install libobs-dev libavcodec-dev
+      run: sudo apt-get update && sudo apt-get install libobs-dev libavcodec-dev libssl-dev
 
     - name: Create Build Environment
       # Some projects don't allow in-source building, so create a separate build directory
@@ -83,7 +83,8 @@ jobs:
         path: obs-studio
 
     - name: Install build dependencies
-      run: sudo apt-get update && sudo apt-get install libobs-dev libavcodec-dev
+      # Note: 18.04 has an older libobs-dev, so we need to actually install the full upstream OBS instead in order to meet dependencies.
+      run: sudo add-apt-repository ppa:obsproject/obs-studio -y && sudo apt-get update && sudo apt-get install ffmpeg obs-studio libavcodec-dev libssl-dev
 
     - name: Create Build Environment
       # Some projects don't allow in-source building, so create a separate build directory
