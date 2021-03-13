@@ -7,7 +7,7 @@ obs-ios-camera-source Linux branch
 ==============
 This is a fork of [obs-ios-camera-source](https://github.com/wtsnz/obs-ios-camera-source) that supports Linux.
 
-To use this you use the [accompanying iOS app](https://will.townsend.io/products/obs-iphone/) to begin streaming in OBS.
+To use this you use the [accompanying iOS app](https://obs.camera/) to begin streaming in OBS.
 
 ## Downloads
 

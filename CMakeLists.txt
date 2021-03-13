@@ -5,7 +5,7 @@ set(CMAKE_PREFIX_PATH "${QTDIR}")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
-set (CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
 
 include(external/FindLibObs.cmake)
 
@@ -28,9 +28,6 @@ endif()
 # ---- libcnary
 
 set(libcnary_HEADERS
-	deps/libplist/libcnary/include/iterator.h
-	deps/libplist/libcnary/include/list.h
-	deps/libplist/libcnary/include/node_iterator.h
 	deps/libplist/libcnary/include/node_list.h
 	deps/libplist/libcnary/include/node.h
 	deps/libplist/libcnary/include/object.h
@@ -38,9 +35,6 @@ set(libcnary_HEADERS
 
 set(libcnary_SOURCES
 	deps/libplist/libcnary/cnary.c
-	deps/libplist/libcnary/iterator.c
-	deps/libplist/libcnary/list.c
-	deps/libplist/libcnary/node_iterator.c
 	deps/libplist/libcnary/node_list.c
 	deps/libplist/libcnary/node.c
 )
@@ -57,7 +51,6 @@ set(libplist_HEADERS
 	deps/libplist/src/base64.h
 	deps/libplist/src/bytearray.h
 	deps/libplist/src/hashtable.h
-	deps/libplist/src/msc_config.h
 	deps/libplist/src/plist.h
 	deps/libplist/src/ptrarray.h
 	deps/libplist/src/strbuf.h
@@ -119,12 +112,13 @@ target_link_libraries(libplist
 set(libusbmuxd_HEADERS
 	deps/libusbmuxd/common/collection.h
 	deps/libusbmuxd/common/socket.h
-	deps/libusbmuxd/src/msc_config.h
+	deps/libusbmuxd/common/thread.h
 )
 
 set(libusbmuxd_SOURCES
 	deps/libusbmuxd/common/collection.c
 	deps/libusbmuxd/common/socket.c
+	deps/libusbmuxd/common/thread.c
 	deps/libusbmuxd/src/libusbmuxd.c
 )
 
@@ -135,6 +129,34 @@ include_directories(libusbmuxd include
 add_library(libusbmuxd STATIC
 	${libusbmuxd_SOURCES}
 	${libusbmuxd_HEADERS})
+
+
+# Cmake version of configure.ac
+INCLUDE (CheckIncludeFiles)
+INCLUDE(CheckFunctionExists)
+
+
+CHECK_INCLUDE_FILES (sys/inotify.h HAVE_INOTIFY_H)
+if(${HAVE_INOTIFY_H})
+	add_definitions(-DHAVE_INOTIFY)
+endif()
+
+check_function_exists(stpncpy HAVE_STPNCPY)
+if(${HAVE_STPNCPY})
+	add_definitions(-DHAVE_STPNCPY)
+endif()
+
+check_function_exists(pselect HAVE_PSELECT)
+if(${HAVE_PSELECT})
+	add_definitions(-DHAVE_PSELECT)
+endif()
+
+add_definitions(-DPACKAGE_STRING="obs-ios-camera-plugin")
+
+# Ignore multiple definitions of thread_once from libusbmuxd and libplist
+if(MSVC)
+    target_link_options(libusbmuxd PUBLIC /FORCE:MULTIPLE)
+endif()
 
 target_link_libraries(libusbmuxd
 	libplist
@@ -150,16 +172,18 @@ endif()
 set(portal_HEADERS
 	deps/portal/src/Channel.hpp
 	deps/portal/src/Device.hpp
-	deps/portal/src/Portal.hpp
 	deps/portal/src/Protocol.hpp
 	deps/portal/src/logging.h
+	deps/portal/src/DeviceConnection.hpp
+	deps/portal/src/DeviceManager.hpp
 )
 
 set(portal_SOURCES
 	deps/portal/src/Channel.cpp
 	deps/portal/src/Device.cpp
-	deps/portal/src/Portal.cpp
 	deps/portal/src/Protocol.cpp
+	deps/portal/src/DeviceConnection.cpp
+	deps/portal/src/DeviceManager.cpp
 )
 
 include_directories(portal include
@@ -170,10 +194,12 @@ add_library(portal STATIC
 	${portal_SOURCES}
 	${portal_HEADERS})
 
+add_subdirectory(deps/libimobiledevice)
+
 target_link_libraries(portal
 	libusbmuxd
+	libimobiledevice
 )
-
 
 ## -- 
 
@@ -186,7 +212,9 @@ set(obs-ios-camera-source_SOURCES
 	src/VideoDecoder.cpp
 	src/FFMpegVideoDecoder.cpp
 	src/FFMpegAudioDecoder.cpp
-	src/Thread.cpp)
+	src/Thread.cpp
+	src/DeviceApplicationConnectionController.cpp
+)
 
 set(obs-ios-camera-source_HEADERS
 	src/obs-ios-camera-source.h
@@ -195,7 +223,9 @@ set(obs-ios-camera-source_HEADERS
 	src/FFMpegVideoDecoder.h
 	src/FFMpegAudioDecoder.h
 	src/Thread.hpp
-	src/Queue.hpp)
+	src/Queue.hpp
+	src/DeviceApplicationConnectionController.hpp
+)
 
 if(APPLE)
 
