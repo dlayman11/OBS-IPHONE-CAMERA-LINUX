@@ -27,7 +27,8 @@ These instructions are tested on Ubuntu 18.04 and 20.04. For other distros/versi
 
 - Make sure you have the universe and multiverse repositories enabled so you will have access to FFmpeg.
 - Install OBS Studio using the [instructions on the OBS wiki](https://obsproject.com/wiki/install-instructions#ubuntu-installation).
-- Install prerequisites: `sudo apt install build-essential git cmake libavcodec-dev`
+- Install prerequisites: `sudo apt install build-essential git cmake libavcodec-dev libssl-dev`
+  - Note: On Fedora, you will need to install both openssl-devel and openssl-static in order for OpenSSL to be detected properly.
 - Download the OBS Studio source code somewhere: 
   - `cd ~/Downloads`
   - `git clone https://github.com/obsproject/obs-studio.git`
