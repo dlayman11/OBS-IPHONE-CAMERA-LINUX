@@ -1,9 +1,7 @@
 project(libimobiledevice)
 cmake_minimum_required(VERSION 3.2)
 
-set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
-set(OPENSSL_USE_STATIC_LIBS TRUE)
 
 message("OpenSSL include dir: ${OPENSSL_INCLUDE_DIR}")
 message("OpenSSL libraries: ${OPENSSL_LIBRARIES}")
