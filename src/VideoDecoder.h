@@ -1,6 +1,6 @@
 /*
  obs-ios-camera-source
- Copyright (C) 2018    Will Townsend <will@townsend.io>
+ Copyright (C) 2018 Will Townsend <will@townsend.io>
  
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ protected:
     virtual ~VideoDecoder() {};
 public:
     virtual void Init() = 0;
-    virtual void Input(std::vector<char> packet) = 0;
+    virtual void Input(std::vector<char> packet, int type, int tag) = 0;
     virtual void Flush() = 0;
     virtual void Drain() = 0;
     virtual void Shutdown() = 0;

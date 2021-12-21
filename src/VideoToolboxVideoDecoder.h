@@ -16,9 +16,12 @@
  with this program. If not, see <https://www.gnu.org/licenses/>
  */
 
+#pragma once
+
 #include <obs.h>
 #include <chrono>
 #include <vector>
+#include <util/platform.h>
 
 #include <VideoToolbox/VideoToolbox.h>
 
@@ -26,21 +29,15 @@
 #include "Thread.hpp"
 #include "VideoDecoder.h"
 
-//class VideoToolboxDecoderCallback {
-//public:
-//    virtual ~VideoToolboxDecoderCallback() {}
-//
-//    virtual void VideoToolboxDecodedFrame(CVPixelBufferRef aImage, CMVideoFormatDescriptionRef formatDescription) = 0;
-//};
-
 class VideoToolboxDecoder: public VideoDecoder, private Thread
 {
 public:
     VideoToolboxDecoder();
-    
+    ~VideoToolboxDecoder();
+
     void Init() override;
     
-    void Input(std::vector<char> packet) override;
+    void Input(std::vector<char> packet, int type, int tag) override;
     
     void Flush() override;
     void Drain() override;
@@ -52,7 +49,6 @@ public:
     
     // The OBS Source to update.
     obs_source_t *source;
-    
     
 private:
     
@@ -71,6 +67,7 @@ private:
     std::vector<char> ppsData;
     
     WorkQueue<PacketItem *> mQueue;
+    std::mutex mMutex;
     
     obs_source_frame frame;
 };

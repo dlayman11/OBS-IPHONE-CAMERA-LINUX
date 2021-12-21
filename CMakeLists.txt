@@ -5,11 +5,21 @@ set(CMAKE_PREFIX_PATH "${QTDIR}")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
-set (CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 include(external/FindLibObs.cmake)
 
 find_package(LibObs REQUIRED)
+
+find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil)
+# find_ffmpeg_library(avcodec)
+# find_ffmpeg_library(avutil)
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+	set(ARCH 64)
+else()
+	set(ARCH 32)
+endif()
 
 if(WIN32)
 	find_library(WS2_32_LIBRARY ws2_32)
@@ -18,9 +28,6 @@ endif()
 # ---- libcnary
 
 set(libcnary_HEADERS
-	deps/libplist/libcnary/include/iterator.h
-	deps/libplist/libcnary/include/list.h
-	deps/libplist/libcnary/include/node_iterator.h
 	deps/libplist/libcnary/include/node_list.h
 	deps/libplist/libcnary/include/node.h
 	deps/libplist/libcnary/include/object.h
@@ -28,9 +35,6 @@ set(libcnary_HEADERS
 
 set(libcnary_SOURCES
 	deps/libplist/libcnary/cnary.c
-	deps/libplist/libcnary/iterator.c
-	deps/libplist/libcnary/list.c
-	deps/libplist/libcnary/node_iterator.c
 	deps/libplist/libcnary/node_list.c
 	deps/libplist/libcnary/node.c
 )
@@ -47,7 +51,6 @@ set(libplist_HEADERS
 	deps/libplist/src/base64.h
 	deps/libplist/src/bytearray.h
 	deps/libplist/src/hashtable.h
-	deps/libplist/src/msc_config.h
 	deps/libplist/src/plist.h
 	deps/libplist/src/ptrarray.h
 	deps/libplist/src/strbuf.h
@@ -109,12 +112,13 @@ target_link_libraries(libplist
 set(libusbmuxd_HEADERS
 	deps/libusbmuxd/common/collection.h
 	deps/libusbmuxd/common/socket.h
-	deps/libusbmuxd/src/msc_config.h
+	deps/libusbmuxd/common/thread.h
 )
 
 set(libusbmuxd_SOURCES
 	deps/libusbmuxd/common/collection.c
 	deps/libusbmuxd/common/socket.c
+	deps/libusbmuxd/common/thread.c
 	deps/libusbmuxd/src/libusbmuxd.c
 )
 
@@ -125,6 +129,34 @@ include_directories(libusbmuxd include
 add_library(libusbmuxd STATIC
 	${libusbmuxd_SOURCES}
 	${libusbmuxd_HEADERS})
+
+
+# Cmake version of configure.ac
+INCLUDE (CheckIncludeFiles)
+INCLUDE(CheckFunctionExists)
+
+
+CHECK_INCLUDE_FILES (sys/inotify.h HAVE_INOTIFY_H)
+if(${HAVE_INOTIFY_H})
+	add_definitions(-DHAVE_INOTIFY)
+endif()
+
+check_function_exists(stpncpy HAVE_STPNCPY)
+if(${HAVE_STPNCPY})
+	add_definitions(-DHAVE_STPNCPY)
+endif()
+
+check_function_exists(pselect HAVE_PSELECT)
+if(${HAVE_PSELECT})
+	add_definitions(-DHAVE_PSELECT)
+endif()
+
+add_definitions(-DPACKAGE_STRING="obs-ios-camera-plugin")
+
+# Ignore multiple definitions of thread_once from libusbmuxd and libplist
+if(MSVC)
+    target_link_options(libusbmuxd PUBLIC /FORCE:MULTIPLE)
+endif()
 
 target_link_libraries(libusbmuxd
 	libplist
@@ -140,15 +172,18 @@ endif()
 set(portal_HEADERS
 	deps/portal/src/Channel.hpp
 	deps/portal/src/Device.hpp
-	deps/portal/src/Portal.hpp
 	deps/portal/src/Protocol.hpp
+	deps/portal/src/logging.h
+	deps/portal/src/DeviceConnection.hpp
+	deps/portal/src/DeviceManager.hpp
 )
 
 set(portal_SOURCES
 	deps/portal/src/Channel.cpp
 	deps/portal/src/Device.cpp
-	deps/portal/src/Portal.cpp
 	deps/portal/src/Protocol.cpp
+	deps/portal/src/DeviceConnection.cpp
+	deps/portal/src/DeviceManager.cpp
 )
 
 include_directories(portal include
@@ -159,10 +194,12 @@ add_library(portal STATIC
 	${portal_SOURCES}
 	${portal_HEADERS})
 
+add_subdirectory(deps/libimobiledevice)
+
 target_link_libraries(portal
 	libusbmuxd
+	libimobiledevice
 )
-
 
 ## -- 
 
@@ -174,15 +211,21 @@ set(obs-ios-camera-source_SOURCES
 	src/ffmpeg-decode.c
 	src/VideoDecoder.cpp
 	src/FFMpegVideoDecoder.cpp
-	src/Thread.cpp)
+	src/FFMpegAudioDecoder.cpp
+	src/Thread.cpp
+	src/DeviceApplicationConnectionController.cpp
+)
 
 set(obs-ios-camera-source_HEADERS
 	src/obs-ios-camera-source.h
 	src/ffmpeg-decode.h
 	src/VideoDecoder.h
 	src/FFMpegVideoDecoder.h
+	src/FFMpegAudioDecoder.h
 	src/Thread.hpp
-	src/Queue.hpp)
+	src/Queue.hpp
+	src/DeviceApplicationConnectionController.hpp
+)
 
 if(APPLE)
 
@@ -222,7 +265,7 @@ add_library(obs-ios-camera-source MODULE
 	${obs-ios-camera-source_HEADERS})
 
 
-find_package(FFmpeg REQUIRED COMPONENTS avcodec avdevice avutil avformat)
+#find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil)
 
 include_directories( 
 	"${LIBOBS_INCLUDE_DIR}/../UI/obs-frontend-api"
@@ -254,12 +297,18 @@ if(WIN32)
 		message(FATAL_ERROR "Could not find OBS Frontend API\'s library !")
 	endif()
 
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		set(ARCH_NAME "64bit")
+	if(MSVC)
+        # Enable Multicore Builds and disable FH4 (to not depend on VCRUNTIME140_1.DLL)
+	    add_definitions(/MP /d2FH4-)
+    endif()
+
+	if(ARCH EQUAL 64)
+		set(OBS_ARCH_NAME "64bit")
 		set(OBS_BUILDDIR_ARCH "build64")
 	else()
-		set(ARCH_NAME "32bit")
+		set(OBS_ARCH_NAME "32bit")
 		set(OBS_BUILDDIR_ARCH "build32")
+		add_definitions(/arch:SSE2)
 	endif()
 
 	include_directories(
@@ -274,24 +323,50 @@ if(WIN32)
 	set(RELEASE_DIR "${PROJECT_SOURCE_DIR}/release")
 
 	add_custom_command(TARGET obs-ios-camera-source POST_BUILD
+		# If config is Release, package release files
 		COMMAND if $<CONFIG:Release>==1 (
 			"${CMAKE_COMMAND}" -E make_directory
-			"${RELEASE_DIR}/data/obs-plugins/obs-ios-camera-source"
-			"${RELEASE_DIR}/obs-plugins/${ARCH_NAME}")
-			
-		COMMAND if $<CONFIG:Release>==1 ("${CMAKE_COMMAND}" -E copy_directory
-			"${PROJECT_SOURCE_DIR}/data"
-			"${RELEASE_DIR}/data/obs-plugins/obs-ios-camera-source")
+				"${RELEASE_DIR}/data/obs-plugins/obs-ios-camera-source"
+				"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
 
-		COMMAND if $<CONFIG:Release>==1 ("${CMAKE_COMMAND}" -E copy 
-			"$<TARGET_FILE:obs-ios-camera-source>"
-			"${RELEASE_DIR}/obs-plugins/${ARCH_NAME}")
+		COMMAND if $<CONFIG:Release>==1 (
+			"${CMAKE_COMMAND}" -E copy_directory
+				"${PROJECT_SOURCE_DIR}/data"
+				"${RELEASE_DIR}/data/obs-plugins/obs-ios-camera-source")
+
+		COMMAND if $<CONFIG:Release>==1 (
+			"${CMAKE_COMMAND}" -E copy
+				"$<TARGET_FILE:obs-ios-camera-source>"
+				"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
+				
+
+        # If config is RelWithDebInfo, package release files
+		COMMAND if $<CONFIG:RelWithDebInfo>==1 (
+			"${CMAKE_COMMAND}" -E make_directory
+			    "${RELEASE_DIR}/data/obs-plugins/obs-ios-camera-source"
+			    "${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
+
+		COMMAND if $<CONFIG:RelWithDebInfo>==1 (
+            "${CMAKE_COMMAND}" -E copy_directory
+			    "${PROJECT_SOURCE_DIR}/data"
+			    "${RELEASE_DIR}/data/obs-plugins/obs-ios-camera-source")
+
+		COMMAND if $<CONFIG:RelWithDebInfo>==1 (
+            "${CMAKE_COMMAND}" -E copy
+			    "$<TARGET_FILE:obs-ios-camera-source>"
+			    "${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
+
+		COMMAND if $<CONFIG:RelWithDebInfo>==1 (
+            "${CMAKE_COMMAND}" -E copy
+			    "$<TARGET_PDB_FILE:obs-ios-camera-source>"
+			    "${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
+
 
 		# Copy to obs-studio dev environment for immediate testing
 		COMMAND if $<CONFIG:Debug>==1 (
 			"${CMAKE_COMMAND}" -E copy
 				"$<TARGET_FILE:obs-ios-camera-source>"
-				"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/obs-plugins/${ARCH_NAME}")
+				"${LIBOBS_INCLUDE_DIR}/../${OBS_BUILDDIR_ARCH}/rundir/$<CONFIG>/obs-plugins/${OBS_ARCH_NAME}")
 
 		COMMAND if $<CONFIG:Debug>==1 (
 			"${CMAKE_COMMAND}" -E make_directory
@@ -309,11 +384,14 @@ endif()
 
 # --- Linux-specific build settings and tasks ---
 if(UNIX AND NOT APPLE)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
-	target_compile_options(mbedcrypto PRIVATE -fPIC)
-	set_target_properties(obs-ios-camera-source-win PROPERTIES PREFIX "")
-	target_link_libraries(obs-ios-camera-source-win
+	target_compile_options(portal PRIVATE -fPIC)
+	target_compile_options(libusbmuxd PRIVATE -fPIC)
+	target_compile_options(libplist PRIVATE -fPIC)
+	target_compile_options(libcnary PRIVATE -fPIC)
+	set_target_properties(obs-ios-camera-source PROPERTIES PREFIX "")
+	target_link_libraries(obs-ios-camera-source
 		obs-frontend-api)
 
 	file(GLOB locale_files data/locale/*.ini)
@@ -321,7 +399,7 @@ if(UNIX AND NOT APPLE)
 	install(TARGETS obs-ios-camera-source
 		LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/obs-plugins")
 	install(FILES ${locale_files}
-		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ios-camera-source-win/locale")
+		DESTINATION "${CMAKE_INSTALL_PREFIX}/share/obs/obs-plugins/obs-ios-camera-source/locale")
 endif()
 # --- End of section ---
 
