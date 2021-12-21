@@ -19,24 +19,85 @@
 #include "obs-ffmpeg-compat.h"
 #include <obs-avc.h>
 
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(54, 31, 100)
+#define AV_PIX_FMT_VDTOOL AV_PIX_FMT_VIDEOTOOLBOX
+#else
+#define AV_PIX_FMT_VDTOOL AV_PIX_FMT_VDA_VLD
+#endif
+
+
+static AVCodec *find_hardware_decoder(enum AVCodecID id)
+{
+    
+    av_register_all();
+    avcodec_register_all();
+    avcodec_register_all();
+    avformat_network_init();
+    
+    AVHWAccel *hwa = av_hwaccel_next(NULL);
+    AVCodec *c = NULL;
+    
+    while (hwa) {
+        
+        if (hwa->id == id) {
+            if (hwa->pix_fmt == AV_PIX_FMT_VDTOOL ||
+                hwa->pix_fmt == AV_PIX_FMT_DXVA2_VLD ||
+                hwa->pix_fmt == AV_PIX_FMT_VAAPI_VLD) {
+                
+                blog(LOG_INFO, "Found hardware accelerator: %s", hwa->name);
+
+                av_register_hwaccel(hwa);
+                c = avcodec_find_decoder_by_name(hwa->name);
+                
+                if (c) {
+                    blog(LOG_INFO, "Found hardware decoder: %s", c->long_name);
+                    break;
+                } else {
+                    blog(LOG_INFO, "No hardware decoder for %s", hwa->name);
+                }
+            }
+        }
+        
+        hwa = av_hwaccel_next(hwa);
+    }
+    
+    return c;
+}
+
 int ffmpeg_decode_init(struct ffmpeg_decode *decode, enum AVCodecID id)
 {
-    int ret;
+
+	int ret;
+
+    av_register_all();
+    avdevice_register_all();
+    avcodec_register_all();
+    avformat_network_init();
 
     memset(decode, 0, sizeof(*decode));
 
-    decode->codec = avcodec_find_decoder(id);
-    if (!decode->codec)
-        return -1;
-
-    decode->decoder = avcodec_alloc_context3(decode->codec);
-
-    ret = avcodec_open2(decode->decoder, decode->codec, NULL);
-    if (ret < 0)
-    {
-        ffmpeg_decode_free(decode);
-        return ret;
+    // Attempt to find a compatible hardware decoder for the AVCodec
+    decode->codec = find_hardware_decoder(id);
+    
+    if (!decode->codec) {
+        blog(LOG_INFO, "Couldn't find hardware decoder. Using software decoder");
+        // Find the software decoder for the AVCodec
+        decode->codec = avcodec_find_decoder(id);
     }
+	
+	if (!decode->codec)
+		return -1;
+
+    blog(LOG_INFO, "Using decoder: %s (%s)", decode->codec->long_name, decode->codec->name);
+    
+	decode->decoder = avcodec_alloc_context3(decode->codec);
+    
+	ret = avcodec_open2(decode->decoder, decode->codec, NULL);
+	if (ret < 0)
+	{
+		ffmpeg_decode_free(decode);
+		return ret;
+	}
 
     if (decode->codec->capabilities & CODEC_CAP_TRUNC)
         decode->decoder->flags |= CODEC_FLAG_TRUNC;
@@ -220,85 +281,89 @@ bool ffmpeg_decode_video(struct ffmpeg_decode *decode,
                          struct obs_source_frame *frame,
                          bool *got_output)
 {
-    AVPacket packet = {0};
-    int got_frame = false;
-    enum video_format new_format;
-    int ret;
 
-    *got_output = false;
+	AVPacket packet = {0};
+	int got_frame = false;
+	enum video_format new_format;
+	int ret;
 
-    copy_data(decode, data, size);
+	*got_output = false;
 
-    av_init_packet(&packet);
-    packet.data = decode->packet_buffer;
-    packet.size = (int)size;
-    packet.pts = *ts;
+	copy_data(decode, data, size);
 
-    if (decode->codec->id == AV_CODEC_ID_H264 && obs_avc_keyframe(data, size))
-    {
-        packet.flags |= AV_PKT_FLAG_KEY;
-    }
+	av_init_packet(&packet);
+	packet.data = decode->packet_buffer;
+	packet.size = (int)size;
+	packet.pts = *ts;
+	packet.flags |= CODEC_FLAG_TRUNCATED; /* We may send incomplete frames */
+	packet.flags |= CODEC_FLAG2_CHUNKS;
 
-    if (!decode->frame)
-    {
-        decode->frame = av_frame_alloc();
-        if (!decode->frame)
-            return false;
-    }
+	if (decode->codec->id == AV_CODEC_ID_H264 && obs_avc_keyframe(data, size))
+	{
+		packet.flags |= AV_PKT_FLAG_KEY;
+	}
 
-    ret = avcodec_send_packet(decode->decoder, &packet);
+	if (!decode->frame)
+	{
+		decode->frame = av_frame_alloc();
+		if (!decode->frame)
+			return false;
+	}
+
+	ret = avcodec_send_packet(decode->decoder, &packet);
     if (ret == 0)
         ret = avcodec_receive_frame(decode->decoder, decode->frame);
 
-    got_frame = (ret == 0);
+	got_frame = (ret == 0);
 
-    if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
-        ret = 0;
+	if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
+		ret = 0;
 
-    if (ret < 0)
-        return false;
-    else if (!got_frame)
-        return true;
+	if (ret < 0)
+		return false;
+	else if (!got_frame)
+		return true;
 
-    for (size_t i = 0; i < MAX_AV_PLANES; i++)
-    {
-        frame->data[i] = decode->frame->data[i];
-        frame->linesize[i] = decode->frame->linesize[i];
-    }
+	for (size_t i = 0; i < MAX_AV_PLANES; i++)
+	{
+		frame->data[i] = decode->frame->data[i];
+		frame->linesize[i] = decode->frame->linesize[i];
+	}
 
-    new_format = convert_pixel_format(decode->frame->format);
-    if (new_format != frame->format)
-    {
-        bool success;
-        enum video_range_type range;
+	new_format = convert_pixel_format(decode->frame->format);
+	if (new_format != frame->format)
+	{
+		bool success;
+		enum video_range_type range;
 
-        frame->format = new_format;
-        frame->full_range =
-        decode->frame->color_range == AVCOL_RANGE_JPEG;
+		frame->format = new_format;
+		frame->full_range =
+			decode->frame->color_range == AVCOL_RANGE_JPEG;
 
-        range = frame->full_range ? VIDEO_RANGE_FULL : VIDEO_RANGE_PARTIAL;
+		range = frame->full_range ? VIDEO_RANGE_FULL : VIDEO_RANGE_PARTIAL;
 
-        success = video_format_get_parameters(VIDEO_CS_709,
-                                              range, frame->color_matrix,
-                                              frame->color_range_min, frame->color_range_max);
-        if (!success)
-        {
-            blog(LOG_ERROR, "Failed to get video format "
-                 "parameters for video format %u",
-                 VIDEO_CS_709);
-            return false;
-        }
-    }
+		success = video_format_get_parameters(VIDEO_CS_601,
+											  range, frame->color_matrix,
+											  frame->color_range_min, frame->color_range_max);
+		if (!success)
+		{
+			blog(LOG_ERROR, "Failed to get video format "
+							"parameters for video format %u",
+				 VIDEO_CS_601);
+			return false;
+		}
+	}
 
-    *ts = decode->frame->pts;
+	*ts = decode->frame->pkt_pts;
 
-    frame->width = decode->frame->width;
-    frame->height = decode->frame->height;
-    frame->flip = false;
+	frame->width = decode->frame->width;
+	frame->height = decode->frame->height;
+	frame->flip = false;
 
-    if (frame->format == VIDEO_FORMAT_NONE)
-        return false;
+	if (frame->format == VIDEO_FORMAT_NONE)
+		return false;
 
-    *got_output = true;
-    return true;
+	*got_output = true;
+	return true;
+
 }
